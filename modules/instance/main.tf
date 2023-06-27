@@ -1,7 +1,7 @@
 data "yandex_compute_image" "my_image" {
   family = var.instance_family_image
 }
-
+# Create VM-MANAGER
 resource "yandex_compute_instance" "vm-manager" {
   count    = var.managers
   name     = "ci-sockshop-docker-swarm-manager-${count.index}"
@@ -29,6 +29,7 @@ resource "yandex_compute_instance" "vm-manager" {
   }
 
 }
+# Create VM-WORKER
 resource "yandex_compute_instance" "vm-worker" {
   count    = var.workers
   name     = "ci-sockshop-docker-swarm-worker-${count.index}"
