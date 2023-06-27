@@ -1,3 +1,4 @@
+# connect to docker-swarm-manage SSH
 resource "null_resource" "docker-swarm-manager" {
   count = var.managers
   depends_on = [yandex_compute_instance.vm-manager]
@@ -6,12 +7,12 @@ resource "null_resource" "docker-swarm-manager" {
     private_key = file(var.ssh_credentials.private_key)
     host        = yandex_compute_instance.vm-manager[count.index].network_interface.0.nat_ip_address
   }
-
+# transfer file docker-compose.yml
   provisioner "file" {
     source      = "./docker-compose/docker-compose-v3.yml"
     destination = "/home/ubuntu/docker-compose.yml"
   }
-
+# install docker-compose
   provisioner "remote-exec" {
     inline = [
       "curl -fsSL https://get.docker.com | sh",
@@ -23,7 +24,7 @@ resource "null_resource" "docker-swarm-manager" {
     ]
   }
 }
-
+# Connect to docker-swarm-manager SSH
 resource "null_resource" "docker-swarm-manager-join" {
   count = var.managers
   depends_on = [yandex_compute_instance.vm-manager, null_resource.docker-swarm-manager]
@@ -32,12 +33,12 @@ resource "null_resource" "docker-swarm-manager-join" {
     private_key = file(var.ssh_credentials.private_key)
     host        = yandex_compute_instance.vm-manager[count.index].network_interface.0.nat_ip_address
   }
-
+# Create TOKEN for add node to swarm 
   provisioner "local-exec" {
     command = "TOKEN=$(ssh -i ${var.ssh_credentials.private_key} -o StrictHostKeyChecking=no ${var.ssh_credentials.user}@${yandex_compute_instance.vm-manager[count.index].network_interface.0.nat_ip_address} docker swarm join-token -q worker); echo \"#!/usr/bin/env bash\nsudo docker swarm join --token $TOKEN ${yandex_compute_instance.vm-manager[count.index].network_interface.0.nat_ip_address}:2377\nexit 0\" >| join.sh"
   }
 }
-
+# Connect to docker-swarm-worker SSH
 resource "null_resource" "docker-swarm-worker" {
   count = var.workers
   depends_on = [yandex_compute_instance.vm-worker, null_resource.docker-swarm-manager-join]
@@ -46,12 +47,12 @@ resource "null_resource" "docker-swarm-worker" {
     private_key = file(var.ssh_credentials.private_key)
     host        = yandex_compute_instance.vm-worker[count.index].network_interface.0.nat_ip_address
   }
-
+# Transfer join.sh
   provisioner "file" {
     source      = "join.sh"
     destination = "/home/ubuntu/join.sh"
   }
-
+# Add user in group Docker & adding execution rights join.sh
   provisioner "remote-exec" {
     inline = [
       "curl -fsSL https://get.docker.com | sh",
@@ -61,7 +62,7 @@ resource "null_resource" "docker-swarm-worker" {
     ]
   }
 }
-
+# Connect docker-swarm-manager SSH
 resource "null_resource" "docker-swarm-manager-start" {
   depends_on = [yandex_compute_instance.vm-manager, null_resource.docker-swarm-manager-join]
   connection {
@@ -69,13 +70,13 @@ resource "null_resource" "docker-swarm-manager-start" {
     private_key = file(var.ssh_credentials.private_key)
     host        = yandex_compute_instance.vm-manager[0].network_interface.0.nat_ip_address
   }
-
+# Start sockshop-swarm & deploy docker-compose.yml
   provisioner "remote-exec" {
     inline = [
         "sudo docker stack deploy --compose-file ~/docker-compose.yml sockshop-swarm"
     ]
   }
-
+# Delete join.sh
   provisioner "local-exec" {
     command = "rm join.sh"
   }
